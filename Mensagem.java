@@ -1,5 +1,3 @@
-package chat;
-
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
