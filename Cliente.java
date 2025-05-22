@@ -1,14 +1,8 @@
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Scanner;
 
 public class Cliente implements Runnable {
@@ -31,46 +25,53 @@ public class Cliente implements Runnable {
 	public void run() {
 
 		try {
-			InetAddress endereco;
-			endereco = InetAddress.getByName(host);
-
+			InetAddress endereco = InetAddress.getByName(host);
 			Socket socket = new Socket(endereco, porta);
 
-			DataInputStream in = new DataInputStream(socket.getInputStream());
-			DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-
-			String resposta = "Olá servidor eu sou " + socket.getInetAddress().getHostAddress() + ":"
-					+ socket.getPort();
-			out.writeUTF(resposta);
-
-			String mensagem = in.readUTF();
-			System.out.println("[Cliente] Mensagem recebida de " + socket.getInetAddress().getHostAddress() + ":"
-					+ socket.getPort() + "->" + mensagem);
-
 			ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
+			ObjectInputStream inObject = new ObjectInputStream(socket.getInputStream());
+
+			Scanner scanner = new Scanner(System.in);
 
 			while (true) {
-				Scanner scanner = new Scanner(System.in);
-				System.out.print("[Cliente] Digite o número de clientes: ");
+				System.out.print("[Cliente/" + this.nomeUsuario + ": ");
 				String conteudo = scanner.nextLine();
-				scanner.close();
+				String[] palavras = conteudo.split(":");
+
+				if (conteudo.trim().equalsIgnoreCase("/sair")) {
+					break;
+				}
+
+				else if (palavras[0].trim().equalsIgnoreCase("/private")) {
+					Mensagem m = new Mensagem(0, nomeUsuario, palavras[1], palavras[2]);
+					outObject.writeObject(m);
+					outObject.flush();
+				} 
+
+				else if (conteudo.trim().equalsIgnoreCase("/usuarios")) {
+					Mensagem m = new Mensagem(1, nomeUsuario, null, null);
+					outObject.writeObject(m);
+					outObject.flush();
+				}
 				
-				Mensagem m = new Mensagem(host, socket.getInetAddress().getHostAddress(), conteudo);
-				outObject.writeObject(m);
+				else {
+					Mensagem m = new Mensagem(2, nomeUsuario, "Todos", conteudo);
+					outObject.writeObject(m);
+					outObject.flush();
+				}
 			}
-
 			socket.close();
-
 		} catch (IOException e) {
 			e.printStackTrace();
+		} finally {
+			System.out.println("[Cliente] Conexão encerrada.");
 		}
 	}
 
 	public static void main(String[] args) {
 		Scanner scanner = new Scanner(System.in);
-		System.out.print("[Cliente] Digite o nome de clientes: ");
+		System.out.print("[Cliente] Digite o nome de cliente: ");
 		String nome = scanner.nextLine();
-		scanner.close();
 
 		Thread cliente = new Thread(new Cliente("localhost", 1234, nome));
 		cliente.start();
