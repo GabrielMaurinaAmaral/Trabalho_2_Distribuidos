@@ -3,7 +3,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 public class Mensagem implements Serializable {
-    private int comando; 
+    private int comando;
     private String remetente;
     private String destinatario;
     private String conteudo;
@@ -41,6 +41,6 @@ public class Mensagem implements Serializable {
     public String toString() {
         String destino = (destinatario == null) ? "Todos" : destinatario;
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
-        return "[" + horario.format(formatter) + "] " + remetente + " -> " + destino + ": " + conteudo;
+        return "[" + horario.format(formatter) + "] " + remetente + ":" + comando + " -> " + destino + ":" + conteudo;
     }
 }

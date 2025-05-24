@@ -33,33 +33,57 @@ public class Cliente implements Runnable {
 
 			Scanner scanner = new Scanner(System.in);
 
+			new Thread(() -> {
+				try {
+					while (true) {
+						Mensagem recebida = (Mensagem) inObject.readObject();
+
+						if (recebida.getComando() == -1) {
+							System.out.println("[Cliente] Conexão encerrada.");
+							socket.close();
+							break;
+						} else if (recebida.getComando() == 0) {
+							System.out.println("[" + recebida.getRemetente() + "] " + recebida.getConteudo());
+						} else if (recebida.getComando() == 1) {
+							System.out.println("[" + recebida.getRemetente() + "] " + recebida.getConteudo());
+						} else if (recebida.getComando() == 2) {
+							System.out.println("[" + recebida.getRemetente() + "] " + recebida.getConteudo());
+						}
+					}
+				} catch (Exception e) {
+				}
+			}).start();
+
 			while (true) {
-				System.out.print("[Cliente/" + this.nomeUsuario + ": ");
-				String conteudo = scanner.nextLine();
-				String[] palavras = conteudo.split(":");
+    System.out.print("[Cliente/" + this.nomeUsuario + ": ");
+    String conteudo = scanner.nextLine();
+    String[] palavras = conteudo.split(":");
 
-				if (conteudo.trim().equalsIgnoreCase("/sair")) {
-					break;
-				}
-
-				else if (palavras[0].trim().equalsIgnoreCase("/private")) {
-					Mensagem m = new Mensagem(0, nomeUsuario, palavras[1], palavras[2]);
-					outObject.writeObject(m);
-					outObject.flush();
-				} 
-
-				else if (conteudo.trim().equalsIgnoreCase("/usuarios")) {
-					Mensagem m = new Mensagem(1, nomeUsuario, null, null);
-					outObject.writeObject(m);
-					outObject.flush();
-				}
-				
-				else {
-					Mensagem m = new Mensagem(2, nomeUsuario, "Todos", conteudo);
-					outObject.writeObject(m);
-					outObject.flush();
-				}
-			}
+    if (conteudo.trim().equalsIgnoreCase("/sair")) {
+        Mensagem m = new Mensagem(-1, nomeUsuario, null, null);
+        outObject.writeObject(m);
+        outObject.flush();
+        System.out.println("[Cliente] Conexão encerrada.");
+        socket.close();
+        break;
+    } else if (palavras[0].trim().equalsIgnoreCase("/private")) {
+        if (palavras.length >= 3) {
+            Mensagem m = new Mensagem(0, nomeUsuario, palavras[1], palavras[2]);
+            outObject.writeObject(m);
+            outObject.flush();
+        } else {
+            System.out.println("Uso correto: /private:destinatario:mensagem");
+        }
+    } else if (conteudo.trim().equalsIgnoreCase("/usuarios")) {
+        Mensagem m = new Mensagem(1, nomeUsuario, null, null);
+        outObject.writeObject(m);
+        outObject.flush();
+    } else {
+        Mensagem m = new Mensagem(2, nomeUsuario, "Todos", conteudo);
+        outObject.writeObject(m);
+        outObject.flush();
+    }
+}
 			socket.close();
 		} catch (IOException e) {
 			e.printStackTrace();
