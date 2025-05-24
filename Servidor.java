@@ -1,3 +1,4 @@
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -33,14 +34,16 @@ public class Servidor {
 			while (true) {
 				System.out.println("[Servidor] Aguardando conexões na porta " + conexao.getLocalPort() + "...");
 				Socket socket = conexao.accept();
-				String idCliente = socket.getInetAddress().getHostAddress() + ":" + socket.getPort();
-				ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
-				clientesConectados.put(idCliente, new ClienteInfo(socket, outObject));
 
-				System.out.println("[Servidor] Conexão aceita: " + idCliente);
+				DataInputStream in = new DataInputStream(socket.getInputStream());
+				ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
+				String nomeUsuario = in.readUTF(); // Lê o nome do usuário do cliente
+				clientesConectados.put(nomeUsuario, new ClienteInfo(socket, outObject));
+
+				System.out.println("[Servidor] Conexão aceita: " + nomeUsuario + ":" + socket.getInetAddress().getHostAddress() + ":" + socket.getPort());
 				System.out.println("[Servidor] Clientes conectados: " + clientesConectados.keySet());
 
-				Thread cliente = new Thread(new Processador(socket, idCliente, outObject));
+				Thread cliente = new Thread(new Processador(nomeUsuario, socket, outObject));
 				cliente.start();
 			}
 		} catch (SocketTimeoutException e) {
@@ -50,13 +53,13 @@ public class Servidor {
 	}
 
 	class Processador implements Runnable {
-		private Socket socket;
 		private String idCliente;
+		private Socket socket;
 		private ObjectOutputStream outObject;
 
-		public Processador(Socket socket, String idCliente, ObjectOutputStream outObject) {
-			this.socket = socket;
+		public Processador(String idCliente, Socket socket, ObjectOutputStream outObject) {
 			this.idCliente = idCliente;
+			this.socket = socket;
 			this.outObject = outObject;
 		}
 

@@ -1,3 +1,4 @@
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -27,6 +28,9 @@ public class Cliente implements Runnable {
 		try {
 			InetAddress endereco = InetAddress.getByName(this.host);
 			Socket socket = new Socket(endereco, this.porta);
+
+			DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+			out.writeUTF(this.nomeUsuario); 
 
 			ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
 			ObjectInputStream inObject = new ObjectInputStream(socket.getInputStream());
