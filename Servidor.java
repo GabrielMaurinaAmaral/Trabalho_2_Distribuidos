@@ -9,138 +9,337 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Servidor {
 
-	private int porta;
+    private int porta;
 
-	public Servidor(int porta) {
-		this.porta = porta;
-	}
+    public Servidor(int porta) {
+        this.porta = porta;
+    }
 
-	static class ClienteInfo {
-		private Socket socket;
-		private ObjectOutputStream out;
+    static class ClienteInfo {
+        private Socket socket;
+        private ObjectOutputStream out;
 
-		ClienteInfo(Socket socket, ObjectOutputStream out) {
-			this.socket = socket;
-			this.out = out;
-		}
-	}
+        ClienteInfo(Socket socket, ObjectOutputStream out) {
+            this.socket = socket;
+            this.out = out;
+        }
+    }
 
-	private static ConcurrentHashMap<String, ClienteInfo> clientesConectados = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, ClienteInfo> clientesConectados = new ConcurrentHashMap<>();
 
-	public void run() throws IOException {
-		ServerSocket conexao = new ServerSocket(this.porta);
+    public void run() throws IOException {
+        ServerSocket conexao = new ServerSocket(this.porta);
 
-		try {
-			while (true) {
-				System.out.println("[Servidor] Aguardando conexões na porta " + conexao.getLocalPort() + "...");
-				Socket socket = conexao.accept();
+        try {
+            while (true) {
+                System.out.println("[Servidor] Aguardando conexões na porta " + conexao.getLocalPort() + "...");
+                Socket socket = conexao.accept();
 
-				DataInputStream in = new DataInputStream(socket.getInputStream());
-				ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
-				String nomeUsuario = in.readUTF(); // Lê o nome do usuário do cliente
-				clientesConectados.put(nomeUsuario, new ClienteInfo(socket, outObject));
+                DataInputStream in = new DataInputStream(socket.getInputStream());
+                ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
+                String nomeUsuario = in.readUTF();
+                clientesConectados.put(nomeUsuario, new ClienteInfo(socket, outObject));
 
-				System.out.println("[Servidor] Conexão aceita: " + nomeUsuario + ":" + socket.getInetAddress().getHostAddress() + ":" + socket.getPort());
-				System.out.println("[Servidor] Clientes conectados: " + clientesConectados.keySet());
+                System.out.println("[Servidor] Conexão aceita: " + nomeUsuario + ":" + socket.getInetAddress().getHostAddress() + ":" + socket.getPort());
+                System.out.println("[Servidor] Clientes conectados: " + clientesConectados.keySet());
 
-				Thread cliente = new Thread(new Processador(nomeUsuario, socket, outObject));
-				cliente.start();
-			}
-		} catch (SocketTimeoutException e) {
-			System.out.println("[Servidor] Conexão encerrada por inatividade.");
-			conexao.close();
-		}
-	}
+                // Envia mensagem de boas-vindas
+                String mensagemBoasVindas = "=== BEM-VINDO AO CHAT ===\n" +
+                        "Comandos disponíveis:\n" +
+                        "• /usuarios - Exibe lista de usuários online\n" +
+                        "• /private:destinatario:mensagem - Envia mensagem privada\n" +
+                        "• /help - Mostra esta lista de comandos\n" +
+                        "• /sair - Desconecta do chat\n" +
+                        "• Para enviar mensagem para todos, apenas digite a mensagem\n" +
+                        "========================";
 
-	class Processador implements Runnable {
-		private String idCliente;
-		private Socket socket;
-		private ObjectOutputStream outObject;
+                Mensagem bemVindo = new Mensagem("Servidor", nomeUsuario, mensagemBoasVindas);
+                outObject.writeObject(bemVindo);
+                outObject.flush();
 
-		public Processador(String idCliente, Socket socket, ObjectOutputStream outObject) {
-			this.idCliente = idCliente;
-			this.socket = socket;
-			this.outObject = outObject;
-		}
+                Thread cliente = new Thread(new Processador(nomeUsuario, socket, outObject));
+                cliente.start();
+            }
+        } catch (SocketTimeoutException e) {
+            System.out.println("[Servidor] Conexão encerrada por inatividade.");
+            conexao.close();
+        }
+    }
 
-		@Override
-		public void run() {
-			boolean conectado = true;
-			try (ObjectInputStream inObject = new ObjectInputStream(this.socket.getInputStream())) {
-				this.socket.setSoTimeout(60000);
+    class Processador implements Runnable {
+        private String idCliente;
+        private Socket socket;
+        private ObjectOutputStream outObject;
 
-				while (conectado) {
-					Mensagem m = (Mensagem) inObject.readObject();
-					System.out.println("[Servidor] Recebi a pessoa " + m.toString() + " de "
-							+ this.socket.getInetAddress().getHostAddress() + ":" + this.socket.getPort());
+        public Processador(String idCliente, Socket socket, ObjectOutputStream outObject) {
+            this.idCliente = idCliente;
+            this.socket = socket;
+            this.outObject = outObject;
+        }
 
-					if (m.getComando() == -1) {
-						this.outObject.writeObject(new Mensagem(-1, "Servidor", m.getRemetente(), "Você foi desconectado!"));
-						this.outObject.flush();
-						conectado = false;
-						break;
+        @Override
+        public void run() {
+            boolean conectado = true;
+            try (ObjectInputStream inObject = new ObjectInputStream(this.socket.getInputStream())) {
+                this.socket.setSoTimeout(60000);
 
-					} else if (m.getComando() == 0) {
-						for (String id : clientesConectados.keySet()) {
-							if (!id.equals(this.idCliente)) {
-								ClienteInfo clienteInfo = clientesConectados.get(id);
-								if (m.getDestinatario() != null && id.equals(m.getDestinatario())) {
-									clienteInfo.out.writeObject(
-											new Mensagem(0, m.getRemetente(), m.getDestinatario(), m.getConteudo()));
-									clienteInfo.out.flush();
-								}
-							}
-						}
-					} else if (m.getComando() == 1) {
-						StringBuilder lista = new StringBuilder();
-						for (String id : clientesConectados.keySet()) {
-							lista.append(id).append("; ");
-						}
-						this.outObject.writeObject(new Mensagem(1, "Servidor", m.getRemetente(), lista.toString()));
-						this.outObject.flush();
-					} else if (m.getComando() == 2) {
-						for (String id : clientesConectados.keySet()) {
-							if (!id.equals(this.idCliente)) {
-								try {
-									ClienteInfo clienteInfo = clientesConectados.get(id);
-									clienteInfo.out
-											.writeObject(new Mensagem(2, m.getRemetente(), "Todos", m.getConteudo()));
-									clienteInfo.out.flush();
-								} catch (IOException e) {
-									e.printStackTrace();
-								}
-							}
-						}
-					}
-				}
-			} catch (SocketTimeoutException e) {
-				System.out.println(
-						"[Servidor] Conexão com o cliente " + this.socket.getInetAddress().getHostAddress() + ":"
-								+ this.socket.getPort() + " encerrada por inatividade.");
-			} catch (IOException | ClassNotFoundException e) {
-				e.printStackTrace();
-			} finally {
-				clientesConectados.remove(this.idCliente);
-				try {
-					this.outObject.writeObject(new Mensagem(-1, null, null, null));
-					this.outObject.flush();
-					this.socket.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-				System.out.println("[Servidor] Cliente removido: " + this.idCliente);
-				System.out.println("[Servidor] Clientes conectados: " + clientesConectados.keySet());
-			}
-		}
-	}
+                while (conectado) {
+                    Mensagem m = (Mensagem) inObject.readObject();
+                    System.out.println("[Servidor] Recebi mensagem " + m.toString() + " de "
+                            + this.socket.getInetAddress().getHostAddress() + ":" + this.socket.getPort());
 
-	public static void main(String[] args) {
-		Servidor servidor = new Servidor(1234);
+                    // Verifica se é comando para o servidor
+                    if (m.getDestinatario() != null && m.getDestinatario().equals("SERVIDOR")) {
+                        String conteudo = m.getConteudo();
 
-		try {
-			servidor.run();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
+                        if (conteudo.equals("/sair")) {
+                            // Notifica outros usuários sobre a saída
+                            Mensagem notificacaoSaida = new Mensagem("Servidor", "Todos",
+                                    m.getRemetente() + " saiu do chat.");
+
+                            for (String id : clientesConectados.keySet()) {
+                                if (!id.equals(this.idCliente)) {
+                                    try {
+                                        ClienteInfo clienteInfo = clientesConectados.get(id);
+                                        if (!clienteInfo.socket.isClosed()) {
+                                            clienteInfo.out.writeObject(notificacaoSaida);
+                                            clienteInfo.out.flush();
+                                        }
+                                    } catch (IOException e) {
+                                        clientesConectados.remove(id);
+                                    }
+                                }
+                            }
+
+                            this.outObject.writeObject(new Mensagem("SERVIDOR_DISCONNECT", m.getRemetente(), "Você foi desconectado!"));
+                            this.outObject.flush();
+                            conectado = false;
+                            break;
+                        } else if (conteudo.equals("/usuarios")) {
+                            StringBuilder lista = new StringBuilder("Usuários online: ");
+                            for (String id : clientesConectados.keySet()) {
+                                lista.append(id).append("; ");
+                            }
+                            try {
+                                this.outObject.writeObject(new Mensagem("Servidor", m.getRemetente(), lista.toString()));
+                                this.outObject.flush();
+                            } catch (IOException e) {
+                                System.out.println("[Servidor] Erro ao enviar lista de usuários para " + this.idCliente);
+                                conectado = false;
+                            }
+                        } else if (conteudo.equals("/help")) {
+                            String ajuda = "=== COMANDOS DISPONÍVEIS ===\n" +
+                                    "• /usuarios - Exibe lista de usuários online\n" +
+                                    "• /private:destinatario:mensagem - Envia mensagem privada\n" +
+                                    "• /help - Mostra esta lista de comandos\n" +
+                                    "• /sair - Desconecta do chat\n" +
+                                    "• Para enviar mensagem para todos, apenas digite a mensagem\n" +
+                                    "============================";
+                            try {
+                                this.outObject.writeObject(new Mensagem("Servidor", m.getRemetente(), ajuda));
+                                this.outObject.flush();
+                            } catch (IOException e) {
+                                System.out.println("[Servidor] Erro ao enviar ajuda para " + this.idCliente);
+                                conectado = false;
+                            }
+                        }
+                    }
+                    // Verifica se é mensagem privada
+                    else if (m.getDestinatario() != null && !m.getDestinatario().equals("Todos")) {
+                        boolean usuarioEncontrado = false;
+                        for (String id : clientesConectados.keySet()) {
+                            if (id.equals(m.getDestinatario())) {
+                                ClienteInfo clienteInfo = clientesConectados.get(id);
+                                try {
+                                    if (!clienteInfo.socket.isClosed()) {
+                                        clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), m.getDestinatario(), m.getConteudo()));
+                                        clienteInfo.out.flush();
+                                        usuarioEncontrado = true;
+                                    } else {
+                                        clientesConectados.remove(id);
+                                    }
+                                } catch (IOException e) {
+                                    clientesConectados.remove(id);
+                                    System.out.println("[Servidor] Cliente " + id + " removido por erro de conexão.");
+                                }
+                                break;
+                            }
+                        }
+
+                        if (!usuarioEncontrado) {
+                            try {
+                                this.outObject.writeObject(new Mensagem("Servidor", this.idCliente,
+                                        "Usuário '" + m.getDestinatario() + "' não encontrado!"));
+                                this.outObject.flush();
+                            } catch (IOException e) {
+                                System.out.println("[Servidor] Erro ao enviar mensagem de erro para " + this.idCliente);
+                                conectado = false;
+                            }
+                        }
+                    }
+                    // Verifica se é comando disfarçado de mensagem broadcast
+                    else if (m.getConteudo() != null && m.getConteudo().trim().startsWith("/")) {
+                        String conteudo = m.getConteudo().trim();
+
+                        if (conteudo.equals("/usuarios")) {
+                            StringBuilder lista = new StringBuilder("Usuários online: ");
+                            for (String id : clientesConectados.keySet()) {
+                                lista.append(id).append("; ");
+                            }
+                            try {
+                                this.outObject.writeObject(new Mensagem("Servidor", this.idCliente, lista.toString()));
+                                this.outObject.flush();
+                            } catch (IOException e) {
+                                System.out.println("[Servidor] Erro ao enviar lista de usuários para " + this.idCliente);
+                                conectado = false;
+                            }
+                        } else if (conteudo.equals("/help")) {
+                            String ajuda = "=== COMANDOS DISPONÍVEIS ===\n" +
+                                    "• /usuarios - Exibe lista de usuários online\n" +
+                                    "• /private:destinatario:mensagem - Envia mensagem privada\n" +
+                                    "• /help - Mostra esta lista de comandos\n" +
+                                    "• /sair - Desconecta do chat\n" +
+                                    "• Para enviar mensagem para todos, apenas digite a mensagem\n" +
+                                    "============================";
+                            try {
+                                this.outObject.writeObject(new Mensagem("Servidor", this.idCliente, ajuda));
+                                this.outObject.flush();
+                            } catch (IOException e) {
+                                System.out.println("[Servidor] Erro ao enviar ajuda para " + this.idCliente);
+                                conectado = false;
+                            }
+                        } else if (conteudo.startsWith("/private:")) {
+                            String[] partes = conteudo.split(":");
+                            if (partes.length >= 3) {
+                                String destinatario = partes[1];
+                                String mensagemPrivada = partes[2];
+                                boolean usuarioEncontrado = false;
+
+                                for (String id : clientesConectados.keySet()) {
+                                    if (id.equals(destinatario)) {
+                                        ClienteInfo clienteInfo = clientesConectados.get(id);
+                                        try {
+                                            if (!clienteInfo.socket.isClosed()) {
+                                                clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), destinatario, mensagemPrivada));
+                                                clienteInfo.out.flush();
+                                                usuarioEncontrado = true;
+                                            } else {
+                                                clientesConectados.remove(id);
+                                            }
+                                        } catch (IOException e) {
+                                            clientesConectados.remove(id);
+                                            System.out.println("[Servidor] Cliente " + id + " removido por erro de conexão.");
+                                        }
+                                        break;
+                                    }
+                                }
+
+                                if (!usuarioEncontrado) {
+                                    try {
+                                        this.outObject.writeObject(new Mensagem("Servidor", this.idCliente,
+                                                "Usuário '" + destinatario + "' não encontrado!"));
+                                        this.outObject.flush();
+                                    } catch (IOException e) {
+                                        System.out.println("[Servidor] Erro ao enviar mensagem para " + this.idCliente);
+                                        conectado = false;
+                                    }
+                                }
+                            } else {
+                                try {
+                                    this.outObject.writeObject(new Mensagem("Servidor", this.idCliente,
+                                            "Uso correto: /private:destinatario:mensagem"));
+                                    this.outObject.flush();
+                                } catch (IOException e) {
+                                    System.out.println("[Servidor] Erro ao enviar mensagem para " + this.idCliente);
+                                    conectado = false;
+                                }
+                            }
+                        } else {
+                            // Comando desconhecido
+                            String mensagemErro = "Comando '" + conteudo.split(":")[0] + "' não existe!\n" +
+                                    "Para ver os comandos disponíveis, digite /help";
+
+                            try {
+                                this.outObject.writeObject(new Mensagem("Servidor", this.idCliente, mensagemErro));
+                                this.outObject.flush();
+                            } catch (IOException e) {
+                                System.out.println("[Servidor] Erro ao enviar mensagem de erro para " + this.idCliente);
+                                conectado = false;
+                            }
+                        }
+                    }
+                    // Mensagem broadcast normal
+                    else {
+                        for (String id : clientesConectados.keySet()) {
+                            if (!id.equals(this.idCliente)) {
+                                try {
+                                    ClienteInfo clienteInfo = clientesConectados.get(id);
+                                    if (!clienteInfo.socket.isClosed()) {
+                                        clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), "Todos", m.getConteudo()));
+                                        clienteInfo.out.flush();
+                                    } else {
+                                        clientesConectados.remove(id);
+                                    }
+                                } catch (IOException e) {
+                                    clientesConectados.remove(id);
+                                    System.out.println("[Servidor] Cliente " + id + " removido por erro de conexão.");
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (SocketTimeoutException e) {
+                System.out.println("[Servidor] Conexão com o cliente " + this.idCliente + " encerrada por inatividade.");
+                conectado = false;
+            } catch (IOException | ClassNotFoundException e) {
+                System.out.println("[Servidor] Cliente " + this.idCliente + " desconectado inesperadamente.");
+                conectado = false;
+            } finally {
+                clientesConectados.remove(this.idCliente);
+
+                // Notifica outros usuários sobre a desconexão inesperada (se não foi /sair)
+                if (conectado) {
+                    Mensagem notificacaoSaida = new Mensagem("Servidor", "Todos",
+                            this.idCliente + " saiu do chat.");
+
+                    for (String id : clientesConectados.keySet()) {
+                        try {
+                            ClienteInfo clienteInfo = clientesConectados.get(id);
+                            if (!clienteInfo.socket.isClosed()) {
+                                clienteInfo.out.writeObject(notificacaoSaida);
+                                clienteInfo.out.flush();
+                            }
+                        } catch (IOException e) {
+                            // Ignora erros ao notificar outros clientes
+                        }
+                    }
+                }
+
+                try {
+                    if (!this.socket.isClosed()) {
+                        if (conectado) {
+                            this.outObject.writeObject(new Mensagem("SERVIDOR_DISCONNECT", null, null));
+                            this.outObject.flush();
+                        }
+                        this.socket.close();
+                    }
+                } catch (IOException e) {
+                    System.out.println("[Servidor] Socket do cliente " + this.idCliente + " já estava fechado.");
+                }
+
+                System.out.println("[Servidor] Cliente removido: " + this.idCliente);
+                System.out.println("[Servidor] Clientes conectados: " + clientesConectados.keySet());
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Servidor servidor = new Servidor(1234);
+
+        try {
+            servidor.run();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
