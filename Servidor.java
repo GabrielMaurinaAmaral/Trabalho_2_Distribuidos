@@ -92,26 +92,32 @@ public class Servidor {
                     if (m.getDestinatario() != null && m.getDestinatario().equals("SERVIDOR")) {
                         String conteudo = m.getConteudo();
 
+                        // Verifica se é comando de desconexão
                         if (conteudo.equals("/sair")) {
                             // Notifica outros usuários sobre a saída
                             Mensagem notificacaoSaida = new Mensagem("Servidor", "Todos",
                                     m.getRemetente() + " saiu do chat.");
 
+                            // manda a mensgem notificando todos quem saiu
                             for (String id : clientesConectados.keySet()) {
                                 if (!id.equals(this.idCliente)) {
+                                    // tenta enviar a mensagem de desconexão para todos os clientes conectados
                                     try {
                                         ClienteInfo clienteInfo = clientesConectados.get(id);
                                         if (!clienteInfo.socket.isClosed()) {
                                             clienteInfo.out.writeObject(notificacaoSaida);
                                             clienteInfo.out.flush();
                                         }
-                                    } catch (IOException e) {
+                                    } 
+                                    // caso ocorra algum erro ao enviar a mensagem, desconecta o cliente
+                                    catch (IOException e) {
                                         clientesConectados.remove(id);
                                     }
                                 }
                             }
 
-                            this.outObject.writeObject(new Mensagem("SERVIDOR_DISCONNECT", m.getRemetente(), "Voce foi desconectado!"));
+                            // manda mensagem de desconexão para o cliente que saiu
+                            this.outObject.writeObject(new Mensagem("SERVIDOR_DISCONNECT", m.getRemetente(), "Você foi desconectado!"));
                             this.outObject.flush();
                             conectado = false;
                             break;
@@ -137,10 +143,13 @@ public class Servidor {
                                     "- /sair - Desconecta do chat\n" +
                                     "- Para enviar mensagem para todos, apenas digite a mensagem\n" +
                                     "============================";
+                            // manda a lista de comandos disponiveis para o cliente que pediu
                             try {
                                 this.outObject.writeObject(new Mensagem("Servidor", m.getRemetente(), ajuda));
                                 this.outObject.flush();
-                            } catch (IOException e) {
+                            } 
+                            // caso ocorra algum erro ao enviar a lista de comandos, desconecta o cliente
+                            catch (IOException e) {
                                 System.out.println("[Servidor] Erro ao enviar ajuda para " + this.idCliente);
                                 conectado = false;
                             }
@@ -150,24 +159,32 @@ public class Servidor {
                     else if (m.getDestinatario() != null && !m.getDestinatario().equals("Todos")) {
                         boolean usuarioEncontrado = false;
                         for (String id : clientesConectados.keySet()) {
+                            // Verifica se o destinatário é o mesmo que o id do cliente
                             if (id.equals(m.getDestinatario())) {
+                                // pega as informações do cliente que quer conversar no privado
                                 ClienteInfo clienteInfo = clientesConectados.get(id);
+                                // tenta enviar a mensagem privada
                                 try {
+                                    // Verifica se o socket do cliente destinatario está aberto
                                     if (!clienteInfo.socket.isClosed()) {
                                         clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), m.getDestinatario(), m.getConteudo()));
                                         clienteInfo.out.flush();
                                         usuarioEncontrado = true;
-                                    } else {
+                                    } 
+                                    // caso estaja fechado, remove o cliente da lista de conectados
+                                    else {
                                         clientesConectados.remove(id);
                                     }
-                                } catch (IOException e) {
+                                }
+                                // caso ocorra algum erro ao enviar a mensagem, remove o cliente da lista de conectados
+                                catch (IOException e) {
                                     clientesConectados.remove(id);
                                     System.out.println("[Servidor] Cliente " + id + " removido por erro de conexao.");
                                 }
                                 break;
                             }
                         }
-
+                        // Se o usuário não foi encontrado, envia mensagem de erro para o remetente
                         if (!usuarioEncontrado) {
                             try {
                                 this.outObject.writeObject(new Mensagem("Servidor", this.idCliente,

@@ -45,7 +45,8 @@ public class Cliente implements Runnable {
                             Mensagem recebida = (Mensagem) inObject.readObject();
 
                             // Verifica se é mensagem de desconexão (conteúdo especial do servidor)
-                            if (recebida.getRemetente() != null && recebida.getRemetente().equals("SERVIDOR_DISCONNECT")) {
+                            if (recebida.getRemetente() != null
+                                    && recebida.getRemetente().equals("SERVIDOR_DISCONNECT")) {
                                 System.out.println("[Cliente] Conexão encerrada.");
                                 socket.close();
                                 break;
@@ -54,9 +55,8 @@ public class Cliente implements Runnable {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
 
                             // Verifica se é mensagem privada
-                            if (recebida.getDestinatario() != null &&
-                                    !recebida.getDestinatario().equals("Todos") &&
-                                    recebida.getDestinatario().equals(this.nomeUsuario)) {
+                            if (recebida.getDestinatario() != null && !recebida.getDestinatario().equals("Todos")
+                                    && recebida.getDestinatario().equals(this.nomeUsuario)) {
                                 System.out.println("[" + recebida.getHorario().format(formatter) + "] [" +
                                         recebida.getRemetente() + " -> Privado] " + recebida.getConteudo());
                             } else {
