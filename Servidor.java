@@ -1,4 +1,3 @@
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -35,9 +34,34 @@ public class Servidor {
                 System.out.println("[Servidor] Aguardando conexoes na porta " + conexao.getLocalPort() + "...");
                 Socket socket = conexao.accept();
 
-                DataInputStream in = new DataInputStream(socket.getInputStream());
                 ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
-                String nomeUsuario = in.readUTF();
+                ObjectInputStream inObject = new ObjectInputStream(socket.getInputStream());
+
+                String nomeUsuario = null;
+                while (true) {
+                    Mensagem resposta = null;
+                    try {
+                        resposta = (Mensagem) inObject.readObject();
+                    } catch (ClassNotFoundException e) {
+                        outObject.writeObject(new Mensagem("Servidor", null, "Erro interno de leitura de objeto."));
+                        outObject.flush();
+                        continue;
+                    }
+                    String nomeTentativa = resposta.getConteudo();
+
+                    if (!nomeTentativa.matches("[a-zA-Z0-9]+")) {
+                        outObject.writeObject(
+                                new Mensagem("Servidor", null, "Nome inválido! Use apenas letras e números."));
+                        outObject.flush();
+                    } else if (clientesConectados.containsKey(nomeTentativa)) {
+                        outObject.writeObject(new Mensagem("Servidor", null, "Nome já está em uso! Escolha outro."));
+                        outObject.flush();
+                    } else {
+                        nomeUsuario = nomeTentativa;
+                        break;
+                    }
+                }
+
                 clientesConectados.put(nomeUsuario, new ClienteInfo(socket, outObject));
 
                 System.out.println("[Servidor] Conexao aceita: " + nomeUsuario + ":" + socket.getInetAddress().getHostAddress() + ":" + socket.getPort());
@@ -57,7 +81,7 @@ public class Servidor {
                 outObject.writeObject(bemVindo);
                 outObject.flush();
 
-                Thread cliente = new Thread(new Processador(nomeUsuario, socket, outObject));
+                Thread cliente = new Thread(new Processador(nomeUsuario, socket, outObject, inObject));
                 cliente.start();
             }
         } catch (SocketTimeoutException e) {
@@ -70,18 +94,20 @@ public class Servidor {
         private String idCliente;
         private Socket socket;
         private ObjectOutputStream outObject;
+        private ObjectInputStream inObject;
 
-        public Processador(String idCliente, Socket socket, ObjectOutputStream outObject) {
+        public Processador(String idCliente, Socket socket, ObjectOutputStream outObject, ObjectInputStream inObject) {
             this.idCliente = idCliente;
             this.socket = socket;
             this.outObject = outObject;
+            this.inObject = inObject;
         }
 
         @Override
         public void run() {
             boolean conectado = true;
-            try (ObjectInputStream inObject = new ObjectInputStream(this.socket.getInputStream())) {
-                this.socket.setSoTimeout(300000);
+            try  {
+                this.socket.setSoTimeout(60000);
 
                 while (conectado) {
                     Mensagem m = (Mensagem) inObject.readObject();

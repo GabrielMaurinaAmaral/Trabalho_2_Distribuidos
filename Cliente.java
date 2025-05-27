@@ -1,4 +1,3 @@
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -30,13 +29,35 @@ public class Cliente implements Runnable {
             InetAddress endereco = InetAddress.getByName(this.host);
             Socket socket = new Socket(endereco, this.porta);
 
-            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            out.writeUTF(this.nomeUsuario);
-
             ObjectOutputStream outObject = new ObjectOutputStream(socket.getOutputStream());
             ObjectInputStream inObject = new ObjectInputStream(socket.getInputStream());
 
             Scanner scanner = new Scanner(System.in);
+
+            boolean nomeAceito = false;
+            while (!nomeAceito) {
+                System.out.print("[Cliente] Digite seu nome de usuário: ");
+                String tentativaNome = scanner.nextLine();
+                
+                Mensagem tentativa = new Mensagem(null, null, tentativaNome);
+                outObject.writeObject(tentativa);
+                outObject.flush();
+
+                Mensagem resposta = null;
+                try {
+                    resposta = (Mensagem) inObject.readObject();
+                } catch (ClassNotFoundException e) {
+                    System.out.println("[Cliente] Erro: classe Mensagem não encontrada.");
+                    continue;
+                }
+                if (resposta.getConteudo().contains("BEM-VINDO AO CHAT")) {
+                    this.nomeUsuario = tentativaNome;
+                    System.out.println(resposta.getConteudo());
+                    nomeAceito = true;
+                } else {
+                    System.out.println(resposta.getConteudo());
+                }
+            }
 
             Thread leituraMensagem = new Thread(() -> {
                 try {
@@ -121,11 +142,7 @@ public class Cliente implements Runnable {
     }
 
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
-        System.out.print("[Cliente] Digite o nome de cliente: ");
-        String nome = scanner.nextLine();
-
-        Thread cliente = new Thread(new Cliente("localhost", 1234, nome));
+        Thread cliente = new Thread(new Cliente("localhost", 1234));
         cliente.start();
     }
 }
