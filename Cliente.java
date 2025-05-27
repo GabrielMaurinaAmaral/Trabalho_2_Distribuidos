@@ -55,8 +55,7 @@ public class Cliente implements Runnable {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
 
                             // Verifica se é mensagem privada
-                            if (recebida.getDestinatario() != null && !recebida.getDestinatario().equals("Todos")
-                                    && recebida.getDestinatario().equals(this.nomeUsuario)) {
+                            if (recebida.getDestinatario() != null && recebida.getDestinatario().equals(this.nomeUsuario)) {
                                 System.out.println("[" + recebida.getHorario().format(formatter) + "] [" +
                                         recebida.getRemetente() + " -> Privado] " + recebida.getConteudo());
                             } else {
@@ -82,33 +81,33 @@ public class Cliente implements Runnable {
                 String conteudo = scanner.nextLine();
 
                 if (conteudo.trim().equalsIgnoreCase("/sair")) {
-                    Mensagem m = new Mensagem(this.nomeUsuario, "SERVIDOR", "/sair");
+                    Mensagem m = new Mensagem(this.nomeUsuario, null, "/sair");
                     outObject.writeObject(m);
                     outObject.flush();
                     socket.close();
                     break;
-                } else if (conteudo.trim().startsWith("/private:")) {
+                } else if (conteudo.trim().startsWith("/privado:")) {
                     String[] palavras = conteudo.split(":");
                     if (palavras.length >= 3) {
                         String destinatario = palavras[1];
-                        String mensagemPrivada = palavras[2];
+                        String mensagemPrivada = palavras[0]+":"+palavras[2];
                         Mensagem m = new Mensagem(this.nomeUsuario, destinatario, mensagemPrivada);
                         outObject.writeObject(m);
                         outObject.flush();
                     } else {
-                        System.out.println("Uso correto: /private:destinatario:mensagem");
+                        System.out.println("Uso correto: /privado:destinatario:mensagem");
                     }
                 } else if (conteudo.trim().equalsIgnoreCase("/usuarios")) {
-                    Mensagem m = new Mensagem(this.nomeUsuario, "SERVIDOR", "/usuarios");
+                    Mensagem m = new Mensagem(this.nomeUsuario, null, "/usuarios");
                     outObject.writeObject(m);
                     outObject.flush();
                 } else if (conteudo.trim().equalsIgnoreCase("/help")) {
-                    Mensagem m = new Mensagem(this.nomeUsuario, "SERVIDOR", "/help");
+                    Mensagem m = new Mensagem(this.nomeUsuario, null, "/help");
                     outObject.writeObject(m);
                     outObject.flush();
                 } else {
                     // Mensagem para todos
-                    Mensagem m = new Mensagem(this.nomeUsuario, "Todos", conteudo);
+                    Mensagem m = new Mensagem(this.nomeUsuario, null, conteudo);
                     outObject.writeObject(m);
                     outObject.flush();
                 }

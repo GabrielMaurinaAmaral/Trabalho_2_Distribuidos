@@ -44,10 +44,10 @@ public class Servidor {
                 System.out.println("[Servidor] Clientes conectados: " + clientesConectados.keySet());
 
                 // Envia mensagem de boas-vindas
-                String mensagemBoasVindas = "=== BEM-VINDO AO CHAT ===\n" +
+                String mensagemBoasVindas = "\n=== BEM-VINDO AO CHAT ===\n" +
                         "Comandos disponíveis:\n" +
                         "- /usuarios - Exibe lista de usuarios online\n" +
-                        "- /private:destinatario:mensagem - Envia mensagem privada\n" +
+                        "- /privado:destinatario:mensagem - Envia mensagem privada\n" +
                         "- /help - Mostra esta lista de comandos\n" +
                         "- /sair - Desconecta do chat\n" +
                         "- Para enviar mensagem para todos, apenas digite a mensagem\n" +
@@ -81,82 +81,39 @@ public class Servidor {
         public void run() {
             boolean conectado = true;
             try (ObjectInputStream inObject = new ObjectInputStream(this.socket.getInputStream())) {
-                this.socket.setSoTimeout(60000);
+                this.socket.setSoTimeout(300000);
 
                 while (conectado) {
                     Mensagem m = (Mensagem) inObject.readObject();
                     System.out.println("[Servidor] Recebi mensagem " + m.toString() + " de "
                             + this.socket.getInetAddress().getHostAddress() + ":" + this.socket.getPort());
 
-                    // Verifica se é comando para o servidor
-                    if (m.getDestinatario() != null && m.getDestinatario().equals("SERVIDOR")) {
-                        String conteudo = m.getConteudo();
+                    if (m.getConteudo() != null && m.getConteudo().trim().equals("/sair")) {
+                        System.out.println("[Servidor] Cliente " + this.idCliente + " solicitou desconexão.");
+                        conectado = false;
 
-                        // Verifica se é comando de desconexão
-                        if (conteudo.equals("/sair")) {
-                            // Notifica outros usuários sobre a saída
-                            Mensagem notificacaoSaida = new Mensagem("Servidor", "Todos",
-                                    m.getRemetente() + " saiu do chat.");
+                        // Notifica outros usuários sobre a saída
+                        Mensagem notificacaoSaida = new Mensagem("Servidor", null,
+                                this.idCliente + " saiu do chat.");
 
-                            // manda a mensgem notificando todos quem saiu
-                            for (String id : clientesConectados.keySet()) {
-                                if (!id.equals(this.idCliente)) {
-                                    // tenta enviar a mensagem de desconexão para todos os clientes conectados
-                                    try {
-                                        ClienteInfo clienteInfo = clientesConectados.get(id);
-                                        if (!clienteInfo.socket.isClosed()) {
-                                            clienteInfo.out.writeObject(notificacaoSaida);
-                                            clienteInfo.out.flush();
-                                        }
-                                    } 
-                                    // caso ocorra algum erro ao enviar a mensagem, desconecta o cliente
-                                    catch (IOException e) {
-                                        clientesConectados.remove(id);
+                        for (String id : clientesConectados.keySet()) {
+                            if (!id.equals(this.idCliente)) {
+                                try {
+                                    ClienteInfo clienteInfo = clientesConectados.get(id);
+                                    if (!clienteInfo.socket.isClosed()) {
+                                        clienteInfo.out.writeObject(notificacaoSaida);
+                                        clienteInfo.out.flush();
                                     }
+                                } catch (IOException e) {
+                                    // Ignora erros ao notificar
                                 }
                             }
-
-                            // manda mensagem de desconexão para o cliente que saiu
-                            this.outObject.writeObject(new Mensagem("SERVIDOR_DISCONNECT", m.getRemetente(), "Você foi desconectado!"));
-                            this.outObject.flush();
-                            conectado = false;
-                            break;
-                        } else if (conteudo.equals("/usuarios")) {
-                            StringBuilder lista = new StringBuilder("\n=================\nUsuarios online: \n");
-                            for (String id : clientesConectados.keySet()) {
-                                lista.append("-");
-                                lista.append(id).append("\n");
-                            }
-                            lista.append("=================");
-                            try {
-                                this.outObject.writeObject(new Mensagem("Servidor", m.getRemetente(), lista.toString()));
-                                this.outObject.flush();
-                            } catch (IOException e) {
-                                System.out.println("[Servidor] Erro ao enviar lista de usuarios para " + this.idCliente);
-                                conectado = false;
-                            }
-                        } else if (conteudo.equals("/help")) {
-                            String ajuda = "=== COMANDOS DISPONIVEIS ===\n" +
-                                    "- /usuarios - Exibe lista de usuarios online\n" +
-                                    "- /private:destinatario:mensagem - Envia mensagem privada\n" +
-                                    "- /help - Mostra esta lista de comandos\n" +
-                                    "- /sair - Desconecta do chat\n" +
-                                    "- Para enviar mensagem para todos, apenas digite a mensagem\n" +
-                                    "============================";
-                            // manda a lista de comandos disponiveis para o cliente que pediu
-                            try {
-                                this.outObject.writeObject(new Mensagem("Servidor", m.getRemetente(), ajuda));
-                                this.outObject.flush();
-                            } 
-                            // caso ocorra algum erro ao enviar a lista de comandos, desconecta o cliente
-                            catch (IOException e) {
-                                System.out.println("[Servidor] Erro ao enviar ajuda para " + this.idCliente);
-                                conectado = false;
-                            }
                         }
+                        break;
                     }
+
                     // Verifica se é mensagem privada
-                    else if (m.getDestinatario() != null && !m.getDestinatario().equals("Todos")) {
+                    else if (m.getDestinatario() != null ) {
                         boolean usuarioEncontrado = false;
                         for (String id : clientesConectados.keySet()) {
                             // Verifica se o destinatário é o mesmo que o id do cliente
@@ -167,11 +124,12 @@ public class Servidor {
                                 try {
                                     // Verifica se o socket do cliente destinatario está aberto
                                     if (!clienteInfo.socket.isClosed()) {
-                                        clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), m.getDestinatario(), m.getConteudo()));
+                                        String[] palavras = m.getConteudo().split(":");
+                                        clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), m.getDestinatario(), palavras[1]));
                                         clienteInfo.out.flush();
                                         usuarioEncontrado = true;
-                                    } 
-                                    // caso estaja fechado, remove o cliente da lista de conectados
+                                    }
+                                    // caso esteja fechado, remove o cliente da lista de conectados
                                     else {
                                         clientesConectados.remove(id);
                                     }
@@ -179,7 +137,7 @@ public class Servidor {
                                 // caso ocorra algum erro ao enviar a mensagem, remove o cliente da lista de conectados
                                 catch (IOException e) {
                                     clientesConectados.remove(id);
-                                    System.out.println("[Servidor] Cliente " + id + " removido por erro de conexao.");
+                                    System.out.println("[Servidor] Cliente " + id + " removido por erro de conexao");
                                 }
                                 break;
                             }
@@ -196,16 +154,17 @@ public class Servidor {
                             }
                         }
                     }
-                    // Verifica se é comando disfarçado de mensagem broadcast
+                    // Verifica se é comando ou broadcast
                     else if (m.getConteudo() != null && m.getConteudo().trim().startsWith("/")) {
                         String conteudo = m.getConteudo().trim();
 
                         if (conteudo.equals("/usuarios")) {
-                            StringBuilder lista = new StringBuilder("=================\nUsuarios online: ");
+                            StringBuilder lista = new StringBuilder("\n=================\nUsuarios online: \n");
                             for (String id : clientesConectados.keySet()) {
+                                lista.append("-");
                                 lista.append(id).append("\n");
                             }
-                            lista.append("=================\n");
+                            lista.append("=================");
                             try {
                                 this.outObject.writeObject(new Mensagem("Servidor", this.idCliente, lista.toString()));
                                 this.outObject.flush();
@@ -214,9 +173,9 @@ public class Servidor {
                                 conectado = false;
                             }
                         } else if (conteudo.equals("/help")) {
-                            String ajuda = "=== COMANDOS DISPONIVEIS ===\n" +
+                            String ajuda = "\n=== COMANDOS DISPONIVEIS ===\n" +
                                     "- /usuarios - Exibe lista de usuarios online\n" +
-                                    "- /private:destinatario:mensagem - Envia mensagem privada\n" +
+                                    "- /privado:destinatario:mensagem - Envia mensagem privada\n" +
                                     "- /help - Mostra esta lista de comandos\n" +
                                     "- /sair - Desconecta do chat\n" +
                                     "- Para enviar mensagem para todos, apenas digite a mensagem\n" +
@@ -228,56 +187,10 @@ public class Servidor {
                                 System.out.println("[Servidor] Erro ao enviar ajuda para " + this.idCliente);
                                 conectado = false;
                             }
-                        } else if (conteudo.startsWith("/private:")) {
-                            String[] partes = conteudo.split(":");
-                            if (partes.length >= 3) {
-                                String destinatario = partes[1];
-                                String mensagemPrivada = partes[2];
-                                boolean usuarioEncontrado = false;
-
-                                for (String id : clientesConectados.keySet()) {
-                                    if (id.equals(destinatario)) {
-                                        ClienteInfo clienteInfo = clientesConectados.get(id);
-                                        try {
-                                            if (!clienteInfo.socket.isClosed()) {
-                                                clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), destinatario, mensagemPrivada));
-                                                clienteInfo.out.flush();
-                                                usuarioEncontrado = true;
-                                            } else {
-                                                clientesConectados.remove(id);
-                                            }
-                                        } catch (IOException e) {
-                                            clientesConectados.remove(id);
-                                            System.out.println("[Servidor] Cliente " + id + " removido por erro de conexao.");
-                                        }
-                                        break;
-                                    }
-                                }
-
-                                if (!usuarioEncontrado) {
-                                    try {
-                                        this.outObject.writeObject(new Mensagem("Servidor", this.idCliente,
-                                                "Usuario '" + destinatario + "' nao encontrado!"));
-                                        this.outObject.flush();
-                                    } catch (IOException e) {
-                                        System.out.println("[Servidor] Erro ao enviar mensagem para " + this.idCliente);
-                                        conectado = false;
-                                    }
-                                }
-                            } else {
-                                try {
-                                    this.outObject.writeObject(new Mensagem("Servidor", this.idCliente,
-                                            "Uso correto: /private:destinatario:mensagem"));
-                                    this.outObject.flush();
-                                } catch (IOException e) {
-                                    System.out.println("[Servidor] Erro ao enviar mensagem para " + this.idCliente);
-                                    conectado = false;
-                                }
-                            }
                         } else {
                             // Comando desconhecido
                             String mensagemErro = "Comando '" + conteudo.split(":")[0] + "' nao existe!\n" +
-                                    "Para ver os comandos disponíveis, digite /help";
+                                    "Para ver os comandos disponiveis, digite /help";
 
                             try {
                                 this.outObject.writeObject(new Mensagem("Servidor", this.idCliente, mensagemErro));
@@ -295,7 +208,7 @@ public class Servidor {
                                 try {
                                     ClienteInfo clienteInfo = clientesConectados.get(id);
                                     if (!clienteInfo.socket.isClosed()) {
-                                        clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), "Todos", m.getConteudo()));
+                                        clienteInfo.out.writeObject(new Mensagem(m.getRemetente(), null, m.getConteudo()));
                                         clienteInfo.out.flush();
                                     } else {
                                         clientesConectados.remove(id);
@@ -319,7 +232,7 @@ public class Servidor {
 
                 // Notifica outros usuários sobre a desconexão inesperada (se não foi /sair)
                 if (conectado) {
-                    Mensagem notificacaoSaida = new Mensagem("Servidor", "Todos",
+                    Mensagem notificacaoSaida = new Mensagem("Servidor", null,
                             this.idCliente + " saiu do chat.");
 
                     for (String id : clientesConectados.keySet()) {
