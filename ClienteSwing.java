@@ -1,11 +1,10 @@
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import javax.swing.*;
 
 public class ClienteSwing extends JFrame {
     private JTextArea areaTexto;
@@ -45,11 +44,35 @@ public class ClienteSwing extends JFrame {
             InetAddress endereco = InetAddress.getByName(host);
             socket = new Socket(endereco, porta);
 
-            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-            out.writeUTF(this.nomeUsuario);
-
             outObject = new ObjectOutputStream(socket.getOutputStream());
             inObject = new ObjectInputStream(socket.getInputStream());
+
+        boolean nomeAceito = false;
+        while (!nomeAceito) {
+            Mensagem tentativa = new Mensagem(null, null, nomeUsuario);
+            outObject.writeObject(tentativa);
+            outObject.flush();
+
+            Mensagem resposta = null;
+            try {
+                resposta = (Mensagem) inObject.readObject();
+            } catch (ClassNotFoundException e) {
+                areaTexto.append("[Cliente] Erro: classe Mensagem não encontrada.\n");
+                continue;
+            }
+            if (resposta.getConteudo().contains("BEM-VINDO AO CHAT")) {
+                this.nomeUsuario = nomeUsuario;
+                areaTexto.append(resposta.getConteudo() + "\n");
+                nomeAceito = true;
+            } else {
+                areaTexto.append(resposta.getConteudo() + "\n");
+                nomeUsuario = JOptionPane.showInputDialog(this, "Digite outro nome de usuário:");
+                if (nomeUsuario == null || nomeUsuario.trim().isEmpty()) {
+                    socket.close();
+                    return;
+                }
+            }
+        }
 
             Thread leituraMensagem = new Thread(() -> {
                 try {
