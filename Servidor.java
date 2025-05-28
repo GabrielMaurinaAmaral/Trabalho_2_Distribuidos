@@ -80,7 +80,24 @@ public class Servidor {
                 Mensagem bemVindo = new Mensagem("Servidor", nomeUsuario, mensagemBoasVindas);
                 outObject.writeObject(bemVindo);
                 outObject.flush();
+				String entrou = nomeUsuario+" entrou no servidor";
+                    for (String id : clientesConectados.keySet()) {
+                        if(!id.equals(nomeUsuario)) {
+                            try {
+                                ClienteInfo clienteInfo = clientesConectados.get(id);
+                                if (!clienteInfo.socket.isClosed()) {
+                                    clienteInfo.out.writeObject(new Mensagem("Servidor", null, entrou));
+                                    clienteInfo.out.flush();
+                                } else {
+                                    clientesConectados.remove(id);
+                                }
+                            } catch (IOException e) {
+                                clientesConectados.remove(id);
+                                System.out.println("[Servidor] Cliente " + id + " removido por erro de conexao.");
+                            }
 
+                        }
+                }
                 Thread cliente = new Thread(new Processador(nomeUsuario, socket, outObject, inObject));
                 cliente.start();
             }
